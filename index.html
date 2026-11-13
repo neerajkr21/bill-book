@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f7b5c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<title>Bill Book</title>
+<style>
+  :root { --ink:#1b1f2a; --muted:#667085; --line:#e1e5ec; --bg:#f3f5f9; --green:#0f7b5c; --red:#c8323c; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); padding-bottom:70px; }
+  header { background:var(--green); color:#fff; padding:14px 16px; }
+  header h1 { margin:0; font-size:18px; } header small { opacity:.85; }
+  main { max-width:520px; margin:0 auto; padding:14px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+  h2 { margin:0 0 10px; font-size:15px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 3px; }
+  input, select { width:100%; padding:11px; border:1px solid var(--line); border-radius:10px; font:inherit; font-size:16px; background:#fff; }
+  .row { display:flex; gap:8px; align-items:flex-end; }
+  .row > * { flex:1; } .row .narrow { flex:0 0 90px; }
+  button { font:inherit; font-size:15px; padding:11px 14px; border-radius:10px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  button.primary { background:var(--green); color:#fff; border-color:var(--green); font-weight:600; width:100%; margin-top:10px; }
+  button.wa { background:#25a244; color:#fff; border-color:#25a244; font-weight:600; width:100%; margin-top:8px; }
+  button.small { padding:6px 10px; font-size:13px; }
+  .line { display:flex; justify-content:space-between; gap:8px; padding:8px 0; border-bottom:1px dashed var(--line); font-size:15px; }
+  .line .x { color:var(--red); cursor:pointer; padding-left:8px; }
+  .sum div { display:flex; justify-content:space-between; padding:3px 0; font-size:14px; color:var(--muted); }
+  .sum .total { color:var(--ink); font-size:20px; font-weight:800; border-top:1px solid var(--line); margin-top:6px; padding-top:8px; }
+  nav { position:fixed; bottom:0; left:0; right:0; display:flex; background:#fff; border-top:1px solid var(--line); }
+  nav button { flex:1; border:0; border-radius:0; padding:16px 0; background:#fff; color:var(--muted); font-weight:600; }
+  nav button.on { color:var(--green); box-shadow:inset 0 3px 0 var(--green); }
+  .hidden { display:none !important; }
+  .big { font-size:34px; font-weight:800; }
+  .hist { display:flex; justify-content:space-between; padding:11px 0; border-bottom:1px solid var(--line); cursor:pointer; }
+  .muted { color:var(--muted); font-size:13px; }
+  #qrBox { text-align:center; } #qrBox canvas { max-width:100%; }
+  .err { color:var(--red); font-size:13px; min-height:16px; }
+</style>
+</head>
+<body>
+<header><h1 id="shopTitle">Bill Book</h1><small id="subTitle">Works offline. Bills stay on this phone.</small></header>
+<main>
+
+  <!-- NEW BILL -->
+  <section id="tab-new">
+    <div class="card">
+      <h2>New bill <span class="muted" id="nextNo"></span></h2>
+      <div class="row">
+        <div><label>Item</label><select id="itemSel"></select></div>
+        <div class="narrow"><label>Qty</label><input id="qty" type="number" inputmode="decimal" min="0" step="any" value="1"></div>
+      </div>
+      <button id="addLine" class="primary" style="margin-top:8px">+ Add to bill</button>
+      <div id="lines" style="margin-top:8px"></div>
+      <div class="row" style="margin-top:8px">
+        <div><label>Discount %</label><input id="disc" type="number" inputmode="decimal" min="0" max="100" step="any" value="0"></div>
+        <div><label>Tax (GST) %</label><input id="tax" type="number" inputmode="decimal" min="0" max="100" step="any" value="0"></div>
+      </div>
+      <div class="sum" id="sum"></div>
+      <div class="err" id="billErr"></div>
+      <button id="saveBill" class="primary">Save bill and show QR</button>
+    </div>
+  </section>
+
+  <!-- BILL VIEW -->
+  <section id="tab-view" class="hidden">
+    <div class="card" id="viewCard"></div>
+    <div class="card" id="qrBox"><canvas id="qrCanvas" width="260" height="260"></canvas><div class="muted" id="qrNote"></div></div>
+    <button class="wa" id="shareBtn">Share on WhatsApp</button>
+    <button class="primary" id="newBtn" style="background:#fff;color:var(--green)">+ New bill</button>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="tab-hist" class="hidden">
+    <div class="card"><div class="muted">Total sales today</div><div class="big" id="todayTotal">₹0</div><div class="muted" id="todayCount"></div></div>
+    <div class="card"><h2>Bills</h2><div id="histList"></div></div>
+  </section>
+
+  <!-- SETUP -->
+  <section id="tab-set" class="hidden">
+    <div class="card">
+      <h2>Shop profile</h2>
+      <label>Shop name</label><input id="shopName">
+      <label>Your UPI ID (the QR sends money to this)</label><input id="upi" placeholder="name@bank" autocapitalize="off">
+      <div class="err" id="upiErr"></div>
+    </div>
+    <div class="card">
+      <h2>Items and prices</h2>
+      <div id="itemList"></div>
+      <div class="row" style="margin-top:10px">
+        <div><label>New item</label><input id="newItemName"></div>
+        <div class="narrow"><label>Price ₹</label><input id="newItemPrice" type="number" inputmode="decimal" min="0" step="any"></div>
+      </div>
+      <button id="addItem" class="primary">Add item</button>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button data-tab="new" class="on">New bill</button>
+  <button data-tab="hist">History</button>
+  <button data-tab="set">Shop</button>
+</nav>
+
+<script src="qrcode.js"></script>
+<script>
+(() => {
+  const KEY = "billbook-v1";
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+  /* ---------- storage ---------- */
+  const DEFAULT = {
+    shop: { name: "Grocery Stores", upi: "" },
+    items: [ { name: "Rice 1 kg", paise: 6000 }, { name: "Oil 1 L", paise: 16500 }, { name: "Sugar 1 kg", paise: 4500 }, { name: "Tea 250 g", paise: 12000 } ],
+    bills: [], next: 101
+  };
+  function load() { try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.shop && d.items && d.bills) return d; } catch (e) {} return JSON.parse(JSON.stringify(DEFAULT)); }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} }
+  let db = load();
+
+  /* ---------- money: everything in whole paise so totals never drift ---------- */
+  const toPaise = r => Math.round(parseFloat(r) * 100);
+  const rupees = p => "₹" + (p / 100).toLocaleString("en-IN", { minimumFractionDigits: p % 100 ? 2 : 0, maximumFractionDigits: 2 });
+  const plain = p => (p / 100).toFixed(2);
+
+  function calc(lines, discPct, taxPct) {
+    const sub = lines.reduce((s, l) => s + Math.round(l.qty * l.paise), 0);
+    const discount = Math.round(sub * (discPct || 0) / 100);
+    const taxable = sub - discount;
+    const tax = Math.round(taxable * (taxPct || 0) / 100);
+    return { sub, discount, taxable, tax, total: taxable + tax };
+  }
+  function upiLink(upi, name, paise, billNo) {
+    return "upi://pay?pa=" + encodeURIComponent(upi) + "&pn=" + encodeURIComponent(name) + "&am=" + plain(paise) + "&cu=INR&tn=" + encodeURIComponent("Bill " + billNo);
+  }
+  const validUpi = s => /^[a-zA-Z0-9.\-_]{2,}@[a-zA-Z]{2,}$/.test(s);
+
+  /* ---------- QR drawing (works on any canvas, so the shared image gets it too) ---------- */
+  function drawQR(ctx, text, x, y, size) {
+    const qr = qrcode(0, "M"); qr.addData(text); qr.make();
+    const n = qr.getModuleCount(), cell = size / n;
+    ctx.fillStyle = "#fff"; ctx.fillRect(x - 8, y - 8, size + 16, size + 16);
+    ctx.fillStyle = "#000";
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) ctx.fillRect(Math.floor(x + c * cell), Math.floor(y + r * cell), Math.ceil(cell), Math.ceil(cell));
+  }
+
+  /* ---------- tabs ---------- */
+  function tab(name) {
+    ["new", "view", "hist", "set"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== name));
+    document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === (name === "view" ? "new" : name)));
+    if (name === "hist") renderHist(); if (name === "set") renderSetup(); if (name === "new") renderNew();
+  }
+  document.querySelectorAll("nav button").forEach(b => b.onclick = () => tab(b.dataset.tab));
+
+  /* ---------- new bill ---------- */
+  let cur = [];
+  function renderNew() {
+    $("shopTitle").textContent = db.shop.name || "Bill Book";
+    $("nextNo").textContent = "#" + db.next;
+    $("itemSel").innerHTML = db.items.map((it, i) => `<option value="${i}">${esc(it.name)} · ${rupees(it.paise)}</option>`).join("");
+    $("lines").innerHTML = cur.map((l, i) => `<div class="line"><span>${esc(l.name)} × ${l.qty}</span><span>${rupees(Math.round(l.qty * l.paise))}<span class="x" data-i="${i}">✕</span></span></div>`).join("") || '<div class="muted">No items yet.</div>';
+    document.querySelectorAll(".line .x").forEach(x => x.onclick = () => { cur.splice(+x.dataset.i, 1); renderNew(); });
+    const c = calc(cur, parseFloat($("disc").value) || 0, parseFloat($("tax").value) || 0);
+    $("sum").innerHTML = `<div><span>Subtotal</span><span>${rupees(c.sub)}</span></div>` +
+      (c.discount ? `<div><span>Discount</span><span>−${rupees(c.discount)}</span></div>` : "") +
+      (c.tax ? `<div><span>Tax</span><span>${rupees(c.tax)}</span></div>` : "") +
+      `<div class="total"><span>Total</span><span>${rupees(c.total)}</span></div>`;
+  }
+  $("addLine").onclick = () => {
+    const it = db.items[+$("itemSel").value], q = parseFloat($("qty").value);
+    if (!it || !(q > 0)) return;
+    cur.push({ name: it.name, qty: q, paise: it.paise }); $("qty").value = 1; renderNew();
+  };
+  ["disc", "tax"].forEach(id => $(id).addEventListener("input", renderNew));
+
+  let shown = null;
+  $("saveBill").onclick = () => {
+    $("billErr").textContent = "";
+    if (!cur.length) { $("billErr").textContent = "Add at least one item."; return; }
+    if (!validUpi(db.shop.upi)) { $("billErr").textContent = "Set a valid UPI ID in the Shop tab first."; return; }
+    const d = Math.min(100, Math.max(0, parseFloat($("disc").value) || 0)), t = Math.min(100, Math.max(0, parseFloat($("tax").value) || 0));
+    const c = calc(cur, d, t);
+    const bill = { no: db.next++, ts: Date.now(), lines: cur.map(l => ({ ...l })), discPct: d, taxPct: t, ...c };
+    db.bills.unshift(bill); save();
+    cur = []; $("disc").value = 0; $("tax").value = 0;
+    showBill(bill);
+  };
+
+  /* ---------- bill view ---------- */
+  function billHtml(b) {
+    return `<div style="display:flex;justify-content:space-between"><strong>${esc(db.shop.name)}</strong><span class="muted">#${b.no}</span></div>
+      <div class="muted">${new Date(b.ts).toLocaleString("en-IN")}</div><div style="margin:8px 0">` +
+      b.lines.map(l => `<div class="line"><span>${esc(l.name)} × ${l.qty}</span><span>${rupees(Math.round(l.qty * l.paise))}</span></div>`).join("") + `</div>
+      <div class="sum">${b.discount ? `<div><span>Discount (${b.discPct}%)</span><span>−${rupees(b.discount)}</span></div>` : ""}${b.tax ? `<div><span>Tax (${b.taxPct}%)</span><span>${rupees(b.tax)}</span></div>` : ""}
+      <div class="total"><span>Total</span><span>${rupees(b.total)}</span></div></div>`;
+  }
+  function showBill(b) {
+    shown = b; tab("view");
+    $("viewCard").innerHTML = billHtml(b);
+    const link = upiLink(db.shop.upi, db.shop.name, b.total, b.no);
+    const cvs = $("qrCanvas"), ctx = cvs.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cvs.width, cvs.height); drawQR(ctx, link, 14, 14, cvs.width - 28);
+    $("qrNote").textContent = "Scan with any UPI app. Pays " + rupees(b.total) + " to " + db.shop.upi;
+    window.__lastUpiLink = link;
+  }
+  $("newBtn").onclick = () => tab("new");
+
+  function billImage(b) {
+    const w = 600, lineH = 38, h = 220 + b.lines.length * lineH + (b.discount ? 34 : 0) + (b.tax ? 34 : 0) + 110 + 380;
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const x = cv.getContext("2d");
+    x.fillStyle = "#fff"; x.fillRect(0, 0, w, h); x.fillStyle = "#1b1f2a";
+    x.font = "bold 34px system-ui, sans-serif"; x.fillText(db.shop.name, 30, 56);
+    x.font = "22px system-ui, sans-serif"; x.fillStyle = "#667085"; x.fillText("Bill #" + b.no + "  ·  " + new Date(b.ts).toLocaleString("en-IN"), 30, 92);
+    let y = 140; x.fillStyle = "#1b1f2a"; x.font = "24px system-ui, sans-serif";
+    b.lines.forEach(l => { x.textAlign = "left"; x.fillText(l.name + " × " + l.qty, 30, y); x.textAlign = "right"; x.fillText(rupees(Math.round(l.qty * l.paise)), w - 30, y); y += lineH; });
+    x.strokeStyle = "#ddd"; x.beginPath(); x.moveTo(30, y - 14); x.lineTo(w - 30, y - 14); x.stroke(); y += 14;
+    if (b.discount) { x.textAlign = "left"; x.fillText("Discount (" + b.discPct + "%)", 30, y); x.textAlign = "right"; x.fillText("−" + rupees(b.discount), w - 30, y); y += 34; }
+    if (b.tax) { x.textAlign = "left"; x.fillText("Tax (" + b.taxPct + "%)", 30, y); x.textAlign = "right"; x.fillText(rupees(b.tax), w - 30, y); y += 34; }
+    x.font = "bold 32px system-ui, sans-serif"; x.textAlign = "left"; x.fillText("Total", 30, y + 10); x.textAlign = "right"; x.fillText(rupees(b.total), w - 30, y + 10); y += 50;
+    drawQR(x, upiLink(db.shop.upi, db.shop.name, b.total, b.no), (w - 300) / 2, y, 300);
+    x.textAlign = "center"; x.font = "20px system-ui, sans-serif"; x.fillStyle = "#667085"; x.fillText("Scan to pay " + rupees(b.total) + " by UPI", w / 2, y + 340);
+    return cv;
+  }
+  async function share(b) {
+    const cv = billImage(b);
+    const blob = await new Promise(r => cv.toBlob(r, "image/png"));
+    const file = new File([blob], "bill-" + b.no + ".png", { type: "image/png" });
+    const text = db.shop.name + " · Bill #" + b.no + " · Total " + rupees(b.total);
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], text }); return; } catch (e) { if (e.name === "AbortError") return; } }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();     // fallback: save the picture, then open WhatsApp with the text
+    setTimeout(() => { URL.revokeObjectURL(a.href); window.open("https://wa.me/?text=" + encodeURIComponent(text + " (bill image saved to your downloads)"), "_blank"); }, 400);
+  }
+  $("shareBtn").onclick = () => shown && share(shown);
+
+  /* ---------- history ---------- */
+  const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+  function renderHist() {
+    const today = db.bills.filter(b => sameDay(b.ts, Date.now()));
+    $("todayTotal").textContent = rupees(today.reduce((s, b) => s + b.total, 0));
+    $("todayCount").textContent = today.length + " bill" + (today.length === 1 ? "" : "s") + " today";
+    $("histList").innerHTML = db.bills.map((b, i) => `<div class="hist" data-i="${i}"><span>#${b.no} <span class="muted">${new Date(b.ts).toLocaleDateString("en-IN")}</span></span><strong>${rupees(b.total)}</strong></div>`).join("") || '<div class="muted">No bills yet.</div>';
+    document.querySelectorAll(".hist").forEach(h => h.onclick = () => showBill(db.bills[+h.dataset.i]));
+  }
+
+  /* ---------- setup ---------- */
+  function renderSetup() {
+    $("shopName").value = db.shop.name; $("upi").value = db.shop.upi;
+    $("itemList").innerHTML = db.items.map((it, i) => `<div class="line"><span>${esc(it.name)}</span><span>${rupees(it.paise)}<span class="x" data-i="${i}">✕</span></span></div>`).join("");
+    document.querySelectorAll("#itemList .x").forEach(x => x.onclick = () => { db.items.splice(+x.dataset.i, 1); save(); renderSetup(); });
+  }
+  $("shopName").oninput = e => { db.shop.name = e.target.value; save(); $("shopTitle").textContent = db.shop.name; };
+  $("upi").oninput = e => { db.shop.upi = e.target.value.trim(); $("upiErr").textContent = validUpi(db.shop.upi) ? "" : "That doesn't look like a UPI ID (example: name@bank)."; save(); };
+  $("addItem").onclick = () => {
+    const n = $("newItemName").value.trim(), p = toPaise($("newItemPrice").value);
+    if (!n || !(p >= 0)) return; db.items.push({ name: n, paise: p }); save(); $("newItemName").value = ""; $("newItemPrice").value = ""; renderSetup();
+  };
+
+  renderNew();
+  window.BB = { calc, upiLink, toPaise, rupees, validUpi, get db() { return db; }, billImage };
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+</script>
+</body>
+</html>
